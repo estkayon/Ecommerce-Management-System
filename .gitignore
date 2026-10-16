@@ -1,6 +1,7 @@
 
 # Environment variables and sensitive credentials
 .env
+.env.testing
 .env.*
 !.env.example
 
