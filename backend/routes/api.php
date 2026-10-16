@@ -4,6 +4,7 @@
 use App\Http\Controllers\Api\Admin\AuthController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\Admin\InventoryController;
 
 // Public login endpoint.
 Route::post('/admin/login', [AuthController::class, 'login'])
@@ -17,4 +18,8 @@ Route::prefix('admin')
         Route::post('/logout', [AuthController::class, 'logout']);
 
         Route::apiResource('products', ProductController::class);
+
+        Route::get('products/{product}/inventory', [InventoryController::class, 'show']);
+
+        Route::post('products/{product}/inventory/adjust', [InventoryController::class, 'adjust']);
     });
