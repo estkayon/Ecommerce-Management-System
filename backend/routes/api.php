@@ -5,6 +5,9 @@ use App\Http\Controllers\Api\Admin\AuthController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Admin\InventoryController;
+use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\Admin\OrderController;
+
 
 // Public login endpoint.
 Route::post('/admin/login', [AuthController::class, 'login'])
@@ -20,6 +23,9 @@ Route::prefix('admin')
         Route::apiResource('products', ProductController::class);
 
         Route::get('products/{product}/inventory', [InventoryController::class, 'show']);
-
         Route::post('products/{product}/inventory/adjust', [InventoryController::class, 'adjust']);
+        Route::post('orders/{order}/cancel', [OrderController::class, 'cancel']);
     });
+
+Route::post('/checkout', [CheckoutController::class, 'store'])
+    ->middleware('throttle:10,1');
