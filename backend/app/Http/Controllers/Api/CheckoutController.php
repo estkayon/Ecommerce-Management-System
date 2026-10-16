@@ -19,9 +19,14 @@ class CheckoutController extends Controller
             $request->validated()
         );
 
+        $paymentAccessToken = $order->getRelation('paymentAccessToken');
+
+        $order->unsetRelation('paymentAccessToken');
+
         return response()->json([
             'message' => 'Order placed successfully.',
             'data' => $order,
+            'payment_access_token' => $paymentAccessToken,
         ], 201);
     }
 }

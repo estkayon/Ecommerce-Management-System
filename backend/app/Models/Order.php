@@ -23,6 +23,7 @@ class Order extends Model
         'paid_at',
         'cancelled_at',
         'expires_at',
+        'payment_access_token_hash',
     ];
 
     protected function casts(): array
@@ -53,4 +54,7 @@ class Order extends Model
         return $this->hasOne(Delivery::class);
     }
     
+    protected $hidden = [
+    'payment_access_token_hash',
+    ];
 }

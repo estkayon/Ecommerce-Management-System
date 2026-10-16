@@ -247,6 +247,43 @@ class CheckoutTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 2);
     }
 
+    
+    public function test_checkout_generates_secure_payment_access_token(): void
+    {
+        $response = $this->postJson('/api/checkout', [
+            'customer_name' => 'Token Test Customer',
+            'customer_email' => 'customer@example.com',
+            'customer_phone' => '01712345678',
+            'shipping_address' => 'Dhaka, Bangladesh',
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => 1,
+                ],
+            ],
+        ])->assertCreated();
+
+        $token = $response->json('payment_access_token');
+        $orderId = $response->json('data.id');
+
+        $this->assertIsString($token);
+        $this->assertSame(64, strlen($token));
+
+        $order = \App\Models\Order::findOrFail($orderId);
+
+        $this->assertSame(
+            hash('sha256', $token),
+            $order->payment_access_token_hash
+        );
+
+        $response->assertJsonMissingPath(
+            'data.payment_access_token_hash'
+        );
+
+        $response->assertJsonMissingPath(
+            'data.paymentAccessToken'
+        );
+    }
 
 
 }

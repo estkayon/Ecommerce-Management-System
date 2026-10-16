@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Admin\InventoryController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\Admin\OrderController;
+use App\Http\Controllers\Api\PaymentCallbackController;
+use App\Http\Controllers\Api\PaymentInitiationController;
 
 
 // Public login endpoint.
@@ -29,3 +31,24 @@ Route::prefix('admin')
 
 Route::post('/checkout', [CheckoutController::class, 'store'])
     ->middleware('throttle:10,1');
+
+Route::prefix('payments/sslcommerz')
+    ->name('payments.sslcommerz.')
+    ->group(function () {
+        Route::post('/success', [PaymentCallbackController::class, 'success'])
+            ->name('success');
+
+        Route::post('/fail', [PaymentCallbackController::class, 'fail'])
+            ->name('fail');
+
+        Route::post('/cancel', [PaymentCallbackController::class, 'cancel'])
+            ->name('cancel');
+
+        Route::post('/ipn', [PaymentCallbackController::class, 'ipn'])
+            ->name('ipn');
+    });
+
+Route::post(
+    '/orders/{order}/payments/initiate',
+    [PaymentInitiationController::class, 'store']
+)->middleware('throttle:5,1');

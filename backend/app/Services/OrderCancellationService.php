@@ -15,7 +15,6 @@ class OrderCancellationService
     public function cancel(int $orderId): Order
     {
         return DB::transaction(function () use ($orderId) {
-            // Lock the order to prevent simultaneous cancellation.
             $order = Order::query()
                 ->lockForUpdate()
                 ->findOrFail($orderId);
@@ -24,9 +23,26 @@ class OrderCancellationService
                 return $order;
             }
 
-            if ($order->status !== 'pending' || $order->payment_status !== 'pending') {
+            if (
+                $order->status !== 'pending' ||
+                $order->payment_status !== 'pending'
+            ) {
                 throw ValidationException::withMessages([
-                    'order' => ['This order cannot be cancelled in its current state.'],
+                    'order' => [
+                        'This order cannot be cancelled in its current state.',
+                    ],
+                ]);
+            }
+
+            $hasActivePayment = $order->payments()
+                ->whereIn('status', ['initiating', 'pending', 'processing'])
+                ->exists();
+
+            if ($hasActivePayment) {
+                throw ValidationException::withMessages([
+                    'order' => [
+                        'This order has an active payment attempt.',
+                    ],
                 ]);
             }
 
@@ -41,7 +57,6 @@ class OrderCancellationService
                 );
             }
 
-            // Update order status within the same transaction.
             $order->update([
                 'status' => 'cancelled',
                 'cancelled_at' => now(),

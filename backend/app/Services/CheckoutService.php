@@ -60,6 +60,7 @@ class CheckoutService
             }
 
             // Create the order using server-calculated monetary values.
+            $paymentAccessToken = Str::random(64);
             $order = Order::create([
                 'order_number' => 'ORD-'.Str::ulid(),
                 'customer_name' => $data['customer_name'],
@@ -73,6 +74,7 @@ class CheckoutService
                 'payment_status' => 'pending',
                 'delivery_status' => 'pending',
                 'expires_at' => now()->addMinutes(30),
+                'payment_access_token_hash' => hash('sha256', $paymentAccessToken),
             ]);
 
             foreach ($orderItems as $item) {
@@ -88,7 +90,11 @@ class CheckoutService
                 );
             }
 
-            return $order->load('items');
+            $order->load('items');
+
+            $order->setRelation('paymentAccessToken', $paymentAccessToken);
+
+            return $order;
         }, 3);
     }
 }

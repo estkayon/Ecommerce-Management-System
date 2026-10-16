@@ -158,4 +158,67 @@ class OrderCancellationTest extends TestCase
 
         $this->assertDatabaseCount('inventory_movements', 2);
     }
+
+    
+    public function test_order_with_active_payment_cannot_be_cancelled(): void
+    {
+        $product = \App\Models\Product::create([
+            'name' => 'Payment Protected Product',
+            'sku' => 'PAY-PROTECT-001',
+            'price' => '1000.00',
+            'is_active' => true,
+        ]);
+
+        $product->inventory()->create();
+
+        app(\App\Services\InventoryService::class)->adjustStock(
+            productId: $product->id,
+            quantityChange: 10,
+            reason: 'Initial test stock'
+        );
+
+        $response = $this->postJson('/api/checkout', [
+            'customer_name' => 'Payment Test Customer',
+            'customer_email' => 'customer@example.com',
+            'customer_phone' => '01712345678',
+            'shipping_address' => 'Dhaka, Bangladesh',
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'quantity' => 2,
+                ],
+            ],
+        ])->assertCreated();
+
+        $order = \App\Models\Order::findOrFail($response->json('data.id'));
+
+        $order->payments()->create([
+            'gateway' => 'sslcommerz',
+            'transaction_id' => 'PAY-ACTIVE-TEST-001',
+            'amount' => $order->total,
+            'currency' => 'BDT',
+            'status' => 'pending',
+        ]);
+
+        try {
+            app(\App\Services\OrderCancellationService::class)
+                ->cancel($order->id);
+
+            $this->fail('Expected cancellation to be rejected.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('order', $exception->errors());
+        }
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseHas('inventories', [
+            'product_id' => $product->id,
+            'quantity' => 8,
+        ]);
+    }
+
+
 }

@@ -19,6 +19,8 @@ class Payment extends Model
         'paid_at',
         'metadata',
         'failure_reason',
+        'last_checked_at',
+        'reconciliation_required_at',
     ];
 
     protected function casts(): array
@@ -28,6 +30,8 @@ class Payment extends Model
             'metadata' => 'array',
             'verified_at' => 'datetime',
             'paid_at' => 'datetime',
+            'last_checked_at' => 'datetime',
+            'reconciliation_required_at' => 'datetime',
         ];
     }
 
