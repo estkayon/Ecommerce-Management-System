@@ -72,6 +72,7 @@ class CheckoutService
                 'status' => 'pending',
                 'payment_status' => 'pending',
                 'delivery_status' => 'pending',
+                'expires_at' => now()->addMinutes(30),
             ]);
 
             foreach ($orderItems as $item) {

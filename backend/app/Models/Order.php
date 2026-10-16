@@ -22,6 +22,7 @@ class Order extends Model
         'delivery_status',
         'paid_at',
         'cancelled_at',
+        'expires_at',
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class Order extends Model
             'total' => 'decimal:2',
             'paid_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'expires_at' => 'datetime',
         ];
     }
 
