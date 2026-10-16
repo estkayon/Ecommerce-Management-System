@@ -89,4 +89,19 @@ class AdminAuthenticationTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    
+    public function test_revoked_token_cannot_authenticate_new_request(): void
+    {
+        $admin = $this->createAdmin();
+        $token = $admin->createToken('admin-api', ['admin'])->plainTextToken;
+
+        // Revoke the token directly to simulate a completed logout.
+        $admin->tokens()->delete();
+
+        $this->withToken($token)
+            ->getJson('/api/admin/me')
+            ->assertUnauthorized();
+    }
+
+
 }
