@@ -1,0 +1,25 @@
+
+# Environment variables and sensitive credentials
+.env
+.env.*
+!.env.example
+
+# Dependencies
+**/vendor/
+**/node_modules/
+
+# Build outputs
+**/.next/
+**/dist/
+**/build/
+
+# Local development files
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+
+# Test and coverage reports
+**/coverage/
+**/.phpunit.cache/
