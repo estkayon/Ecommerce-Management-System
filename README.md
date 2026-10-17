@@ -1,27 +1,29 @@
-<div align="center">
+<div align="center" id="top">
 
-# 🛍️ ShopSphere
+<img src=".github/assets/banner.svg" alt="ShopSphere — Storefront. Operations. Payment reliability." width="100%"/>
 
-### A Single-Vendor E-Commerce & Operations Platform
+<br/>
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=21&duration=3200&pause=1100&color=6366F1&center=true&vCenter=true&width=760&lines=Modern+Storefront+%2B+Business-Focused+Admin;Inventory-Safe+Checkout+%26+Payment+Verification;Laravel+13+%E2%80%A2+Next.js+16+%E2%80%A2+PostgreSQL;Queues+%E2%80%A2+Scheduler+%E2%80%A2+Mock+Delivery)](https://git.io/typing-svg)
+<a href="https://laravel.com/"><img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel 13"/></a>
+<a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16-111111?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js 16"/></a>
+<a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL 17"/></a>
+<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/></a>
+<img src="https://img.shields.io/badge/Tests-104%20passing-209d79?style=for-the-badge" alt="104 passing backend tests"/>
 
-**A full-stack technical assessment focused on reliable order processing, inventory integrity, payments, asynchronous fulfillment, and practical store operations.**
+<p><b>Single-vendor commerce meets reliable backend operations.</b></p>
 
-![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)
-![PHP](https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-16-111111?logo=nextdotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/Backend_Tests-104%20passing-16A34A)
-![License](https://img.shields.io/badge/Use-Technical%20Assessment-64748B)
-
-[Features](#-features) · [Architecture](#-architecture) · [Getting Started](#-getting-started) · [Payments](#-payments-and-reconciliation) · [API](#-api-overview) · [Testing](#-testing) · [Limitations](#-known-limitations)
+<p>
+<a href="#-overview"><b>Overview</b></a> ·
+<a href="#-features"><b>Features</b></a> ·
+<a href="#-architecture"><b>Architecture</b></a> ·
+<a href="#-getting-started"><b>Quick Start</b></a> ·
+<a href="#-api-overview"><b>API</b></a> ·
+<a href="#-testing"><b>Testing</b></a>
+</p>
 
 </div>
 
----
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## ✨ Overview
 
@@ -31,17 +33,17 @@ The backend is responsible for prices, stock reservations, payment verification,
 
 > **Integration disclosure:** Payments are tested against **SSLCommerz sandbox**, not a live merchant account. CarryBee fulfillment is a **mock integration** that generates simulated consignment/tracking references; no real shipments are created.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🚀 Features
 
-| Customer storefront | Admin operations | Backend reliability |
-| --- | --- | --- |
-| Responsive product catalog | Sanctum-protected admin login/logout | Server-side validation and price calculation |
-| Product name/SKU search | Product CRUD, search, pagination | Database transactions and inventory controls |
-| Product details | Stock-in / stock-out with reasons | Stock movement history |
-| Persistent cart and quantity controls | Order browsing and details | Time-limited stock reservation |
-| Validated checkout | Payment history and flagged-payment reviews | SSLCommerz verification and callback handling |
-| SSLCommerz hosted sandbox checkout | Delivery overview and retry for eligible failures | Payment reconciliation jobs and scheduler |
-| Verified payment result page | Live business summary cards | Queue-backed mock CarryBee dispatch |
+<table>
+<tr>
+<td width="33%" valign="top"><h3>🛍️ Customer Storefront</h3>Responsive catalog, name/SKU search, product details, persistent cart, checkout, and verified payment result.</td>
+<td width="33%" valign="top"><h3>🛠️ Admin Operations</h3>Protected dashboard, product CRUD, stock movement history, order/payment records, delivery status, and manual reviews.</td>
+<td width="33%" valign="top"><h3>⚙️ Reliable Backend</h3>Inventory reservations, transactional writes, verified SSLCommerz sandbox callbacks, reconciliation jobs, and mock delivery queues.</td>
+</tr>
+</table>
 
 ### Customer experience
 
@@ -62,6 +64,8 @@ The hosted OTP page is controlled by SSLCommerz, not customized by the applicati
 - **Payment reviews:** Record `investigating` or `refund_required` decisions for specifically flagged reconciliation cases. A review decision **does not perform a refund**.
 - **Deliveries:** View mock consignment/tracking information and retry eligible failed dispatches through a queued job.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🧱 Technology Stack
 
 | Layer | Technologies |
@@ -78,7 +82,12 @@ The hosted OTP page is controlled by SSLCommerz, not customized by the applicati
 
 > Redis and caching are part of the assessment's architecture expectations, but **a working Redis-backed deployment is not verified in this documented setup**. The runnable local instructions use the database queue. See [Known Limitations](#-known-limitations).
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🗺️ Architecture
+
+<img src=".github/assets/request-flow.svg" alt="High-level data flow from ShopSphere browser to Next.js, Laravel, PostgreSQL, SSLCommerz sandbox and background delivery jobs" width="100%"/>
+
 
 ```mermaid
 flowchart LR
@@ -130,6 +139,8 @@ sequenceDiagram
     API-->>Next: Authoritative payment state
 ```
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 📁 Project Structure
 
 ```text
@@ -162,6 +173,8 @@ Ecommerce-Management-System/
 └── NOTES.md                    # Architecture decisions and trade-offs
 ```
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🛠️ Getting Started
 
 ### Prerequisites
@@ -178,11 +191,11 @@ The following commands use PowerShell paths for Windows, but the application is 
 ### 1. Clone and enter the project
 
 ```powershell
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/<your-username>/<your-repository>.git
 cd Ecommerce-Management-System
 ```
 
-Replace `<YOUR_REPOSITORY_URL>` with the actual GitHub repository URL.
+Replace the example clone URL with your actual GitHub repository URL.
 
 ### 2. Configure PostgreSQL
 
@@ -320,6 +333,8 @@ Ensure the backend's documented mock mode and enablement settings in `config/ser
 
 **No live CarryBee API request is claimed or implied.** A real integration requires official API access, credentials, request/response contracts, error/retry handling, and provider validation.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🔌 API Overview
 
 Public endpoints:
@@ -358,6 +373,8 @@ Admin endpoints (protected by Sanctum + admin middleware, except login):
 
 The dashboard UI exposes the most commonly used endpoints; some administrative backend actions are API-only.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 📦 Inventory Integrity
 
 - New product inventory starts at **0**; quantity changes are handled by the inventory service, not by writing directly from the UI.
@@ -366,6 +383,8 @@ The dashboard UI exposes the most commonly used endpoints; some administrative b
 - Stock adjustments cannot intentionally remove more available stock than allowed by the backend.
 - Inventory movements preserve an audit trail of stock changes and their reasons.
 - Order expiry/cancellation and uncertain payment outcomes are treated conservatively to avoid falsely releasing stock or treating an unverified payment as failed.
+
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## 💳 Payments and Reconciliation
 
@@ -382,11 +401,15 @@ SSLCommerz payment sessions and callbacks are implemented in the **sandbox envir
 
 **Customer-facing cart behavior:** Returning from the payment provider does not itself clear the cart. The frontend requests authoritative server-side payment status and clears the cart only when `payment_status` is `paid`.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🚚 Delivery Processing
 
 Eligible paid/confirmed orders trigger an event/listener and a Laravel dispatch job. In the current configuration the job uses **CarryBee mock mode** and writes simulated consignment/tracking identifiers to the database. The queue keeps the provider work out of the synchronous checkout path.
 
 An administrator may retry only an eligible failed delivery with no assigned consignment, for an order already confirmed and paid. Retrying **queues an attempt**; it does not imply immediate success.
+
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## 🧪 Testing
 
@@ -428,6 +451,8 @@ npm run build
 7. Inspect payment history, delivery details, inventory movements, and dashboard totals.
 8. Test a cancelled sandbox payment separately and confirm no premature paid status/cart clearing.
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## ⚡ Performance and Background Work
 
 - Pagination limits large product, payment, order, and delivery lists.
@@ -437,6 +462,8 @@ npm run build
 - Laravel scheduler processes time-based business tasks such as order reservation expiry.
 - The storefront uses Next.js data revalidation (60 seconds for catalog fetches); updates may not appear instantly.
 - Production monitoring, load tests, and a Redis-backed caching strategy remain separate hardening work.
+
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## 🔒 Security Notes
 
@@ -448,6 +475,8 @@ npm run build
 - `.env`, `.env.local`, gateway secrets, database passwords, and generated tokens must remain outside version control.
 
 > This is a technical-assessment implementation. Before public production deployment, audit CSRF/origin handling, XSS safeguards, token expiry/revocation, gateway webhook contracts, rate limiting, logging/PII retention, refunds, and operational recovery.
+
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## ⚠️ Known Limitations
 
@@ -462,6 +491,8 @@ npm run build
 | Frontend libraries | TanStack Query / shadcn/ui were in the assessment specification but are not claimed as implemented without code verification |
 | Production | Operational observability, scalability testing, hardened secrets management, and provider integration remain future improvements |
 
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
+
 ## 🧭 Future Improvements
 
 - Integrate production CarryBee API with signed requests, idempotency, retries, and status synchronization.
@@ -469,6 +500,8 @@ npm run build
 - Add a documented Redis cache/queue deployment and cache invalidation strategy.
 - Improve fraud/risk flows, refund execution, observability, and full production security review.
 - Add CI pipelines for PHP tests, TypeScript checks, build verification, and static analysis.
+
+<img src=".github/assets/divider.svg" width="100%" alt=""/>
 
 ## 📄 Project Documentation
 
@@ -479,8 +512,10 @@ npm run build
 
 <div align="center">
 
-**Built to demonstrate thoughtful full-stack engineering, not just CRUD functionality.**
+**Designed for clarity, correctness, and maintainable operations.**
 
-<sub>ShopSphere · Laravel 13 · Next.js 16 · PostgreSQL · SSLCommerz sandbox · Mock CarryBee</sub>
+<a href="#top">⬆ Back to top</a>
+
+<img src=".github/assets/footer.svg" alt="ShopSphere footer" width="100%"/>
 
 </div>
