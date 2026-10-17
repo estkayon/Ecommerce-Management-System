@@ -23,13 +23,14 @@ class ProductController extends Controller
             })
             ->with('inventory:product_id,quantity')
             ->when(
-                $validated['search'] ?? null,
-                fn ($query, $search) => $query->where(
-                    'name',
-                    'ilike',
-                    '%' . $search . '%'
-                )
-            )
+            $validated['search'] ?? null,
+            function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('sku', 'ilike', "%{$search}%");
+                });
+            }
+        )
             ->orderBy('id')
             ->paginate($validated['per_page'] ?? 36);
 

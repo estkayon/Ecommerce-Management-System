@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\Admin\PaymentResolutionController;
 use App\Http\Controllers\Api\Admin\DeliveryController;
 use App\Http\Controllers\Api\ProductController as PublicProductController;
 use App\Http\Controllers\Api\OrderPaymentStatusController;
+use App\Http\Controllers\Api\Admin\PaymentController;
+use App\Http\Controllers\Api\Admin\DashboardController;
 
 
 // Public login endpoint.
@@ -26,12 +28,16 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'admin'])
     ->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+        Route::get('dashboard', [DashboardController::class, 'index']);
         Route::post('/logout', [AuthController::class, 'logout']);
 
         Route::apiResource('products', ProductController::class);
 
         Route::get('products/{product}/inventory', [InventoryController::class, 'show']);
         Route::post('products/{product}/inventory/adjust', [InventoryController::class, 'adjust']);
+        Route::get('orders', [OrderController::class, 'index']);
+        Route::get('orders/{order}', [OrderController::class, 'show']);
+        Route::get('payments', [PaymentController::class, 'index']);
         Route::post('orders/{order}/cancel', [OrderController::class, 'cancel']);
 
         

@@ -18,8 +18,68 @@ class PaymentCallbackController extends Controller
         private readonly PaymentConfirmationService $confirmationService
     ) {}
 
-    public function success(Request $request): RedirectResponse
+    public function success(Request $request): JsonResponse|RedirectResponse
     {
+        if ($request->expectsJson()) {
+            return $this->verifyPaymentJson($request);
+        }
+
+        return $this->verifyPaymentRedirect($request);
+    }
+
+    public function ipn(Request $request): JsonResponse
+    {
+        return $this->verifyPaymentJson($request);
+    }
+
+    public function fail(Request $request): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson()) {
+            return $this->reconcileNotificationJson($request);
+        }
+
+        return $this->handleUnsuccessfulReturn($request);
+    }
+
+    public function cancel(Request $request): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson()) {
+            return $this->reconcileNotificationJson($request);
+        }
+
+        return $this->handleUnsuccessfulReturn($request);
+    }
+
+    private function verifyPaymentJson(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tran_id' => ['required', 'string', 'max:100'],
+        ]);
+
+        try {
+            $payment = $this->confirmationService->confirm(
+                $data['tran_id']
+            );
+
+            return response()->json([
+                'message' => 'Payment verified successfully.',
+                'payment_id' => $payment->id,
+                'status' => $payment->status,
+            ], 200);
+        } catch (Throwable $exception) {
+            Log::warning('Payment JSON verification failed', [
+                'exception' => $exception::class,
+            ]);
+
+            return response()->json([
+                'message' => 'Payment could not be confirmed.',
+            ], 422);
+        }
+    }
+
+    private function verifyPaymentRedirect(
+        Request $request
+    ): RedirectResponse {
         $payment = $this->findPayment($request);
 
         if (! $payment) {
@@ -56,41 +116,22 @@ class PaymentCallbackController extends Controller
         }
     }
 
-    public function ipn(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'tran_id' => ['required', 'string', 'max:100'],
-        ]);
+    private function reconcileNotificationJson(
+        Request $request
+    ): JsonResponse {
+        $payment = $this->findPayment($request);
 
-        try {
-            $payment = $this->confirmationService->confirm(
-                $data['tran_id']
-            );
-
+        if (! $payment) {
             return response()->json([
-                'message' => 'Payment verified successfully.',
-                'payment_id' => $payment->id,
-                'status' => $payment->status,
-            ]);
-        } catch (Throwable $exception) {
-            Log::warning('Payment IPN verification failed', [
-                'exception' => $exception::class,
-            ]);
-
-            return response()->json([
-                'message' => 'Payment could not be confirmed.',
-            ], 422);
+                'message' => 'Payment not found.',
+            ], 404);
         }
-    }
 
-    public function fail(Request $request): RedirectResponse
-    {
-        return $this->handleUnsuccessfulReturn($request);
-    }
+        $this->dispatchReconciliationIfNeeded($payment);
 
-    public function cancel(Request $request): RedirectResponse
-    {
-        return $this->handleUnsuccessfulReturn($request);
+        return response()->json([
+            'message' => 'Payment notification accepted.',
+        ], 202);
     }
 
     private function handleUnsuccessfulReturn(
@@ -102,6 +143,17 @@ class PaymentCallbackController extends Controller
             return $this->redirectToStore('unverified');
         }
 
+        $this->dispatchReconciliationIfNeeded($payment);
+
+        return $this->redirectToStore(
+            'pending',
+            $payment->order_id
+        );
+    }
+
+    private function dispatchReconciliationIfNeeded(
+        Payment $payment
+    ): void {
         if (in_array(
             $payment->status,
             ['initiating', 'pending', 'processing'],
@@ -109,11 +161,6 @@ class PaymentCallbackController extends Controller
         )) {
             ReconcilePaymentJob::dispatch($payment->id);
         }
-
-        return $this->redirectToStore(
-            'pending',
-            $payment->order_id
-        );
     }
 
     private function findPayment(Request $request): ?Payment
@@ -143,7 +190,7 @@ class PaymentCallbackController extends Controller
         ]);
 
         return redirect()->away(
-            $baseUrl.'/payment/result?'.$query,
+            $baseUrl . '/payment/result?' . $query,
             303
         );
     }

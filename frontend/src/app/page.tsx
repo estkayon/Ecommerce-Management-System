@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import StorefrontHero from "@/components/storefront-hero";
 import AnimatedProductCard from "@/components/animated-product-card";
+import ProductSearch from "@/components/product-search";
 
 export const metadata: Metadata = {
   title: "ShopSphere | Everyday Tech, Elevated",
@@ -26,7 +27,7 @@ type ProductResponse = {
   total?: number;
 };
 
-async function getProducts(): Promise<{
+async function getProducts(search = ""): Promise<{  
   products: Product[];
   total: number;
   error: string | null;
@@ -36,14 +37,22 @@ async function getProducts(): Promise<{
     "http://127.0.0.1:8000/api";
 
   try {
-    const response = await fetch(
-      `${baseUrl}/products?per_page=100`,
-      { next: { revalidate: 60 } }
-    );
+    const params = new URLSearchParams({
+        per_page: "100",
+      });
 
-    if (!response.ok) {
-      throw new Error("Product API unavailable");
-    }
+      if (search) {
+        params.set("search", search);
+      }
+
+      const response = await fetch(
+        `${baseUrl}/products?${params.toString()}`,
+        { next: { revalidate: 60 } }
+      );
+
+      if (!response.ok) {
+        throw new Error("Product API unavailable");
+      }
 
     const payload: ProductResponse | Product[] =
       await response.json();
@@ -72,8 +81,24 @@ async function getProducts(): Promise<{
   }
 }
 
-export default async function Home() {
-  const { products, total, error } = await getProducts();
+  type HomeProps = {
+    searchParams: Promise<{
+      search?: string | string[];
+    }>;
+  };
+
+  export default async function Home({
+    searchParams,
+  }: HomeProps) {
+    const params = await searchParams;
+
+    const search =
+      typeof params.search === "string"
+        ? params.search.trim().slice(0, 100)
+        : "";
+
+    const { products, total, error } =
+      await getProducts(search);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
@@ -150,6 +175,37 @@ export default async function Home() {
             </span>
           </div>
 
+          <div className="mb-10">
+  <div className="mx-auto max-w-3xl">
+    <ProductSearch
+      key={search}
+      initialSearch={search}
+    />
+  </div>
+
+        {search && !error && (
+          <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-600">
+              Found{" "}
+              <span className="font-bold text-indigo-600">
+                {total}
+              </span>{" "}
+              result(s) for{" "}
+              <span className="font-bold text-slate-900">
+                &quot;{search}&quot;
+              </span>
+            </p>
+
+            <a
+              href="/#products"
+              className="text-sm font-bold text-indigo-600 hover:text-indigo-800"
+            >
+              Clear Search →
+            </a>
+          </div>
+        )}
+      </div>
+
           {error ? (
             <div
               role="alert"
@@ -160,10 +216,14 @@ export default async function Home() {
           ) : products.length === 0 ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-14 text-center">
               <h3 className="text-xl font-bold">
-                No products available
+                {search
+                  ? "No matching products found"
+                  : "No products available"}
               </h3>
               <p className="mt-3 text-slate-500">
-                Please check again later.
+                {search
+                  ? "Try another product name or SKU."
+                  : "Please check again later."}
               </p>
             </div>
           ) : (
