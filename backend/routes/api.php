@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\Admin\PaymentSettingController;
 use App\Http\Controllers\Api\Admin\PaymentReviewController;
 use App\Http\Controllers\Api\Admin\PaymentResolutionController;
 use App\Http\Controllers\Api\Admin\DeliveryController;
+use App\Http\Controllers\Api\ProductController as PublicProductController;
+use App\Http\Controllers\Api\OrderPaymentStatusController;
 
 
 // Public login endpoint.
@@ -57,10 +59,19 @@ Route::prefix('admin')
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show']);
 
         Route::post('/deliveries/{delivery}/retry', [DeliveryController::class, 'retry']);
-    });
 
-Route::post('/checkout', [CheckoutController::class, 'store'])
-    ->middleware('throttle:10,1');
+        });
+
+    Route::get('/products', [PublicProductController::class, 'index']);
+    Route::get('/products/{product}', [PublicProductController::class, 'show']);
+
+    Route::post(
+        '/orders/{order}/payment-status',
+        [OrderPaymentStatusController::class, 'show']
+    )->middleware('throttle:30,1');
+
+    Route::post('/checkout', [CheckoutController::class, 'store'])
+        ->middleware('throttle:10,1');
 
 Route::prefix('payments/sslcommerz')
     ->name('payments.sslcommerz.')
