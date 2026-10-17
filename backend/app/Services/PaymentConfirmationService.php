@@ -55,7 +55,11 @@ class PaymentConfirmationService
                 return $lockedPayment;
             }
 
-            if (! in_array($lockedPayment->status, ['pending', 'processing'], true)) {
+            if (! in_array(
+                $lockedPayment->status,
+                ['initiating', 'pending', 'processing'],
+                true
+            )) {
                 throw new RuntimeException(
                     'Payment attempt is not eligible for confirmation.'
                 );

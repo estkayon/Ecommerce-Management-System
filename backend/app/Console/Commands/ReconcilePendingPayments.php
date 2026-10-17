@@ -22,12 +22,11 @@ class ReconcilePendingPayments extends Command
 
         Payment::query()
             ->whereIn('status', ['initiating', 'pending', 'processing'])
+            ->where('created_at', '<=', now()->subMinutes(5))
             ->where(function ($query) {
                 $query->whereNull('last_checked_at')
                     ->orWhere('last_checked_at', '<=', now()->subMinutes(5));
             })
-            ->where('status', 'pending')
-            ->where('created_at', '<=', now()->subMinutes(5))
             ->whereHas('order', function ($query) {
                 $query->where('status', 'pending')
                     ->where('payment_status', 'pending');

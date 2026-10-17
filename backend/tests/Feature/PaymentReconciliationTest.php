@@ -51,12 +51,42 @@ class PaymentReconciliationTest extends TestCase
 
     private function fakeUnresolvedPayment(): void
     {
+        $this->fakeVerification([
+            'APIConnect' => 'DONE',
+            'no_of_trans_found' => 0,
+            'element' => [],
+        ]);
+    }
+
+    private function makeOrderActive(): void
+    {
+        $this->payment->order->update([
+            'expires_at' => now()->addMinutes(30),
+        ]);
+    }
+
+    private function successfulVerification(array $overrides = []): array
+    {
+        return [
+            'APIConnect' => 'DONE',
+            'no_of_trans_found' => 1,
+            'element' => [
+                array_merge([
+                    'status' => 'VALID',
+                    'tran_id' => $this->payment->transaction_id,
+                    'val_id' => 'SSL-RECOVER-001',
+                    'amount' => '2500.00',
+                    'currency' => 'BDT',
+                    'risk_level' => '0',
+                ], $overrides),
+            ],
+        ];
+    }
+
+    private function fakeVerification(array $verification): void
+    {
         Http::fake([
-            'sandbox.sslcommerz.com/*' => Http::response([
-                'APIConnect' => 'DONE',
-                'no_of_trans_found' => 0,
-                'element' => [],
-            ]),
+            'sandbox.sslcommerz.com/*' => Http::response($verification),
         ]);
     }
 
@@ -88,6 +118,8 @@ class PaymentReconciliationTest extends TestCase
 
         $this->assertSame('pending', $payment->status);
         $this->assertNotNull($payment->reconciliation_required_at);
+
+        Http::assertSentCount(1);
     }
 
     public function test_paid_payment_is_not_modified(): void
@@ -187,9 +219,9 @@ class PaymentReconciliationTest extends TestCase
 
         $this->travel(10)->minutes();
 
-        // The current expiration command reports blocked cancellations as failures.
         $this->artisan('orders:expire')
-            ->assertExitCode(1);
+            ->expectsOutput('Processed: 0, Skipped: 1, Failed: 0')
+            ->assertSuccessful();
 
         $this->assertDatabaseHas('orders', [
             'id' => $this->payment->order_id,
@@ -221,5 +253,389 @@ class PaymentReconciliationTest extends TestCase
         );
 
         Http::assertNothingSent();
+    }
+
+    public function test_successful_payment_is_recovered_when_callback_is_missing(): void
+    {
+        $this->makeOrderActive();
+        $this->fakeVerification($this->successfulVerification());
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('paid', $payment->status);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+        ]);
+
+        $this->assertNotNull($payment->verified_at);
+        $this->assertNotNull($payment->paid_at);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_expired_order_with_successful_gateway_payment_requires_review(): void
+    {
+        $this->fakeVerification($this->successfulVerification());
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->last_checked_at);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertSame(
+            'late_successful_payment',
+            $payment->metadata['reconciliation_reason'] ?? null
+        );
+
+        $this->assertNotEmpty(
+            $payment->metadata['review_detected_at'] ?? null
+        );
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_reconciliation_command_processes_all_active_payment_statuses(): void
+    {
+        $this->fakeUnresolvedPayment();
+
+        $order = $this->payment->order;
+
+        $initiatingPayment = $order->payments()->create([
+            'gateway' => 'sslcommerz',
+            'transaction_id' => 'PAY-RECON-INITIATING',
+            'amount' => '2500.00',
+            'currency' => 'BDT',
+            'status' => 'initiating',
+        ]);
+
+        $processingPayment = $order->payments()->create([
+            'gateway' => 'sslcommerz',
+            'transaction_id' => 'PAY-RECON-PROCESSING',
+            'amount' => '2500.00',
+            'currency' => 'BDT',
+            'status' => 'processing',
+        ]);
+
+        $this->travel(10)->minutes();
+
+        $this->artisan('payments:reconcile')
+            ->expectsOutput('Processed: 3, Failed: 0')
+            ->assertSuccessful();
+
+        foreach ([
+            $this->payment,
+            $initiatingPayment,
+            $processingPayment,
+        ] as $payment) {
+            $this->assertNotNull(
+                $payment->fresh()->last_checked_at
+            );
+
+            $this->assertSame(
+                $payment->status,
+                $payment->fresh()->status
+            );
+        }
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_gateway_http_failure_keeps_payment_pending_for_retry(): void
+    {
+        Http::fake([
+            'sandbox.sslcommerz.com/*' => Http::response(
+                ['message' => 'Service temporarily unavailable'],
+                503
+            ),
+        ]);
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->last_checked_at);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_unknown_gateway_transaction_remains_pending(): void
+    {
+        $this->fakeUnresolvedPayment();
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_successful_initiating_payment_can_be_recovered(): void
+    {
+        $this->payment->update([
+            'status' => 'initiating',
+        ]);
+
+        $this->makeOrderActive();
+        $this->fakeVerification($this->successfulVerification());
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('paid', $payment->status);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+        ]);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_successful_processing_payment_can_be_recovered(): void
+    {
+        $this->payment->update([
+            'status' => 'processing',
+        ]);
+
+        $this->makeOrderActive();
+        $this->fakeVerification($this->successfulVerification());
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('paid', $payment->status);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+        ]);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_payment_amount_mismatch_is_not_confirmed(): void
+    {
+        $this->makeOrderActive();
+
+        $this->fakeVerification(
+            $this->successfulVerification([
+                'amount' => '2000.00',
+            ])
+        );
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_payment_currency_mismatch_is_not_confirmed(): void
+    {
+        $this->makeOrderActive();
+
+        $this->fakeVerification(
+            $this->successfulVerification([
+                'currency' => 'USD',
+            ])
+        );
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_high_risk_payment_is_not_automatically_confirmed(): void
+    {
+        $this->makeOrderActive();
+
+        $this->fakeVerification(
+            $this->successfulVerification([
+                'risk_level' => '1',
+            ])
+        );
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_duplicate_gateway_reference_is_not_automatically_confirmed(): void
+    {
+        $this->makeOrderActive();
+
+        $otherOrder = Order::create([
+            'order_number' => 'ORD-RECON-002',
+            'customer_name' => 'Another Customer',
+            'customer_email' => 'another@example.com',
+            'customer_phone' => '01712345679',
+            'shipping_address' => 'Dhaka, Bangladesh',
+            'subtotal' => '2500.00',
+            'shipping_fee' => '0.00',
+            'total' => '2500.00',
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+            'delivery_status' => 'pending',
+        ]);
+
+        $otherOrder->payments()->create([
+            'gateway' => 'sslcommerz',
+            'transaction_id' => 'PAY-OTHER-001',
+            'gateway_payment_id' => 'SSL-RECOVER-001',
+            'amount' => '2500.00',
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'verified_at' => now(),
+            'paid_at' => now(),
+        ]);
+
+        $this->fakeVerification($this->successfulVerification());
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_repeated_successful_verification_does_not_confirm_order_twice(): void
+    {
+        $this->makeOrderActive();
+        $this->fakeVerification($this->successfulVerification());
+
+        $service = app(PaymentReconciliationService::class);
+
+        $first = $service->reconcile($this->payment->id);
+        $second = $service->reconcile($this->payment->id);
+
+        $this->assertSame('paid', $first->status);
+        $this->assertSame('paid', $second->status);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $this->payment->order_id,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+        ]);
+
+        $this->assertSame(
+            1,
+            Payment::query()
+                ->whereKey($this->payment->id)
+                ->where('status', 'paid')
+                ->count()
+        );
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_invalid_late_payment_amount_is_not_marked_as_successful(): void
+    {
+        $this->fakeVerification(
+            $this->successfulVerification([
+                'amount' => '2000.00',
+            ])
+        );
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+
+        $this->assertNotSame(
+            'late_successful_payment',
+            $payment->metadata['reconciliation_reason'] ?? null
+        );
+
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_high_risk_late_payment_is_not_marked_as_successful(): void
+    {
+        $this->fakeVerification(
+            $this->successfulVerification([
+                'risk_level' => '1',
+            ])
+        );
+
+        $payment = app(PaymentReconciliationService::class)
+            ->reconcile($this->payment->id);
+
+        $this->assertSame('pending', $payment->status);
+
+        $this->assertNotSame(
+            'late_successful_payment',
+            $payment->metadata['reconciliation_reason'] ?? null
+        );
+
+        $this->assertNotNull($payment->reconciliation_required_at);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $payment->order_id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
     }
 }

@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Tests\TestCase;
+use App\Models\Setting;
 
 class PaymentInitiationTest extends TestCase
 {
@@ -198,4 +199,94 @@ class PaymentInitiationTest extends TestCase
             Payment::distinct()->count('transaction_id')
         );
     }
+
+    
+public function test_gateway_connection_failure_preserves_payment_for_reconciliation(): void
+{
+    Http::fake([
+        'sandbox.sslcommerz.com/*' => function () {
+            throw new \Illuminate\Http\Client\ConnectionException(
+                'Connection timed out.'
+            );
+        },
+    ]);
+
+    try {
+        $this->initiatePayment();
+        $this->fail('Expected payment initiation to fail.');
+    } catch (RuntimeException $exception) {
+        $this->assertSame(
+            'Payment gateway connection is uncertain.',
+            $exception->getMessage()
+        );
+    }
+
+    $payment = Payment::query()->firstOrFail();
+
+    $this->assertSame('initiating', $payment->status);
+    $this->assertNotNull($payment->reconciliation_required_at);
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $this->order->id,
+        'status' => 'pending',
+        'payment_status' => 'pending',
+    ]);
+}
+
+
+public function test_gateway_server_error_preserves_payment_for_reconciliation(): void
+{
+    Http::fake([
+        'sandbox.sslcommerz.com/*' => Http::response(
+            ['message' => 'Internal server error'],
+            500
+        ),
+    ]);
+
+    try {
+        $this->initiatePayment();
+        $this->fail('Expected payment initiation to fail.');
+    } catch (RuntimeException $exception) {
+        $this->assertSame(
+            'Payment gateway connection is uncertain.',
+            $exception->getMessage()
+        );
+    }
+
+    $payment = Payment::query()->firstOrFail();
+
+    $this->assertSame('initiating', $payment->status);
+    $this->assertNotNull($payment->reconciliation_required_at);
+    $this->assertNull($payment->failure_reason);
+}
+
+
+public function test_disabled_sslcommerz_prevents_payment_initiation(): void
+{
+    Setting::query()->updateOrCreate(
+        ['key' => 'sslcommerz_enabled'],
+        [
+            'value' => ['enabled' => false],
+            'group' => 'payment',
+        ]
+    );
+
+    Http::fake();
+
+    try {
+        $this->initiatePayment();
+
+        $this->fail('Expected payment initiation to be blocked.');
+    } catch (RuntimeException $exception) {
+        $this->assertSame(
+            'SSLCommerz payments are currently disabled.',
+            $exception->getMessage()
+        );
+    }
+
+    $this->assertDatabaseCount('payments', 0);
+
+    Http::assertNothingSent();
+}
+
 }

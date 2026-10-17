@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Payment;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -72,7 +73,6 @@ class SSLCommerzService
             'cus_add1' => $order->shipping_address,
             'cus_country' => 'Bangladesh',
 
-            
             'shipping_method' => 'YES',
             'num_of_item' => $order->items()->sum('quantity'),
             'ship_name' => $order->customer_name,
@@ -81,30 +81,58 @@ class SSLCommerzService
             'ship_postcode' => '1000',
             'ship_country' => 'Bangladesh',
 
-
             'product_name' => 'Order '.$order->order_number,
             'product_category' => 'General',
             'product_profile' => 'general',
         ];
 
-        $response = $this->http
-            ->asForm()
-            ->connectTimeout(10)
-            ->timeout(30)
-            ->post(
-                $this->baseUrl().'/gwprocess/v4/api.php',
-                $payload
+        try {
+            $response = $this->http
+                ->asForm()
+                ->connectTimeout(10)
+                ->timeout(30)
+                ->post(
+                    $this->baseUrl().'/gwprocess/v4/api.php',
+                    $payload
+                );
+        } catch (ConnectionException $exception) {
+            Log::warning('SSLCommerz initiation connection failed', [
+                'transaction_id' => $transactionId,
+                'exception' => $exception::class,
+            ]);
+
+            throw new RuntimeException(
+                'Payment gateway connection is uncertain.',
+                previous: $exception
             );
+        }
+
+        if ($response->failed()) {
+            Log::warning('SSLCommerz initiation HTTP failure', [
+                'transaction_id' => $transactionId,
+                'http_status' => $response->status(),
+            ]);
+
+            throw new RuntimeException(
+                'Payment gateway connection is uncertain.'
+            );
+        }
+
+        $result = $response->json();
+
+        if (! is_array($result)) {
+            throw new RuntimeException(
+                'Payment gateway connection is uncertain.'
+            );
+        }
 
         if (
-            $response->failed() ||
-            $response->json('status') !== 'SUCCESS' ||
-            ! $response->json('GatewayPageURL')
+            ($result['status'] ?? null) === 'FAILED'
         ) {
             Log::warning('SSLCommerz initiation rejected', [
-                'http_status' => $response->status(),
-                'gateway_status' => $response->json('status'),
-                'failed_reason' => $response->json('failedreason'),
+                'transaction_id' => $transactionId,
+                'gateway_status' => $result['status'],
+                'failed_reason' => $result['failedreason'] ?? null,
             ]);
 
             throw new RuntimeException(
@@ -112,10 +140,25 @@ class SSLCommerzService
             );
         }
 
+        if (
+            ($result['status'] ?? null) !== 'SUCCESS' ||
+            empty($result['GatewayPageURL']) ||
+            empty($result['sessionkey'])
+        ) {
+            Log::warning('SSLCommerz initiation response is incomplete', [
+                'transaction_id' => $transactionId,
+                'gateway_status' => $result['status'] ?? null,
+            ]);
+
+            throw new RuntimeException(
+                'Payment gateway connection is uncertain.'
+            );
+        }
+
         return [
             'transaction_id' => $transactionId,
-            'session_key' => $response->json('sessionkey'),
-            'gateway_url' => $response->json('GatewayPageURL'),
+            'session_key' => $result['sessionkey'],
+            'gateway_url' => $result['GatewayPageURL'],
         ];
     }
 

@@ -8,6 +8,8 @@ use App\Services\InventoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
+use App\Jobs\ReconcilePaymentJob;
+use Illuminate\Support\Facades\Queue;
 
 class PaymentCallbackTest extends TestCase
 {
@@ -165,15 +167,35 @@ class PaymentCallbackTest extends TestCase
             ->assertJsonValidationErrors(['tran_id']);
     }
 
+    
+   
     public function test_failure_callback_does_not_confirm_payment(): void
     {
+        Queue::fake();
+
         $this->postJson('/api/payments/sslcommerz/fail', [
             'tran_id' => $this->transactionId,
         ])->assertStatus(202);
+
+        Queue::assertPushed(
+            ReconcilePaymentJob::class,
+            fn (ReconcilePaymentJob $job) =>
+                $job->paymentId === $this->order->payments()
+                    ->firstOrFail()->id
+        );
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $this->order->id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
 
         $this->assertDatabaseHas('payments', [
             'transaction_id' => $this->transactionId,
             'status' => 'pending',
         ]);
+
+        Http::assertNothingSent();
     }
+
 }

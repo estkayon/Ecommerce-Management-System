@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
+use App\Models\Setting;
 
 class PaymentService
 {
@@ -17,6 +18,23 @@ class PaymentService
 
     public function initiate(Order $order, array $callbackUrls): array
     {
+
+    
+        $setting = Setting::query()
+            ->where('key', 'sslcommerz_enabled')
+            ->first();
+
+        $enabled = $setting
+            ? ($setting->value['enabled'] ?? false) === true
+            : true;
+
+        if (! $enabled) {
+            throw new RuntimeException(
+                'SSLCommerz payments are currently disabled.'
+            );
+        }
+
+
         $payment = DB::transaction(function () use ($order) {
             $lockedOrder = Order::query()
                 ->lockForUpdate()
@@ -54,6 +72,7 @@ class PaymentService
             ]);
         });
 
+       
         try {
             $session = $this->gateway->initiate(
                 $order->fresh(),
@@ -61,25 +80,57 @@ class PaymentService
                 $callbackUrls
             );
 
-            $payment->update([
-                'status' => 'pending',
-                'metadata' => [
-                    'session_key' => $session['session_key'],
-                ],
-            ]);
+            $updated = Payment::query()
+                ->whereKey($payment->id)
+                ->where('status', 'initiating')
+                ->update([
+                    'status' => 'pending',
+                    'metadata' => [
+                        'session_key' => $session['session_key'],
+                    ],
+                ]);
+
+            $payment->refresh();
+
+            if (
+                $updated === 0 &&
+                $payment->status !== 'paid'
+            ) {
+                throw new RuntimeException(
+                    'Payment state changed during initiation.'
+                );
+            }
 
             return [
                 'payment_id' => $payment->id,
                 'transaction_id' => $payment->transaction_id,
                 'gateway_url' => $session['gateway_url'],
             ];
-        } catch (Throwable $exception) {
-            $payment->update([
+        }  catch (Throwable $exception) {
+    $isUncertain = $exception instanceof RuntimeException &&
+        $exception->getMessage() ===
+        'Payment gateway connection is uncertain.';
+
+    if ($isUncertain) {
+        Payment::query()
+            ->whereKey($payment->id)
+            ->where('status', 'initiating')
+            ->update([
+                'reconciliation_required_at' => now(),
+                'failure_reason' => null,
+            ]);
+    } else {
+        Payment::query()
+            ->whereKey($payment->id)
+            ->where('status', 'initiating')
+            ->update([
                 'status' => 'failed',
                 'failure_reason' => 'Payment initiation failed.',
             ]);
-
-            throw $exception;
-        }
     }
+
+    throw $exception;
+}
+
+}
 }

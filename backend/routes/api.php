@@ -9,6 +9,9 @@ use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\Admin\OrderController;
 use App\Http\Controllers\Api\PaymentCallbackController;
 use App\Http\Controllers\Api\PaymentInitiationController;
+use App\Http\Controllers\Api\Admin\PaymentSettingController;
+use App\Http\Controllers\Api\Admin\PaymentReviewController;
+use App\Http\Controllers\Api\Admin\PaymentResolutionController;
 
 
 // Public login endpoint.
@@ -27,6 +30,28 @@ Route::prefix('admin')
         Route::get('products/{product}/inventory', [InventoryController::class, 'show']);
         Route::post('products/{product}/inventory/adjust', [InventoryController::class, 'adjust']);
         Route::post('orders/{order}/cancel', [OrderController::class, 'cancel']);
+
+        
+        Route::get(
+            'payment-settings',
+            [PaymentSettingController::class, 'show']
+        );
+
+        Route::patch(
+            'payment-settings',
+            [PaymentSettingController::class, 'update']
+        );
+
+        Route::get(
+            'payment-reviews',
+            [PaymentReviewController::class, 'index']
+        );
+
+        Route::patch(
+            'payment-reviews/{payment}',
+            [PaymentResolutionController::class, 'update']
+        );
+
     });
 
 Route::post('/checkout', [CheckoutController::class, 'store'])
