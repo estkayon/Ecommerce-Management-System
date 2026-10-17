@@ -47,5 +47,11 @@ return [
         'timeout' => 30,
     ],
 
+    'carrybee' => [
+        'enabled' => env('CARRYBEE_ENABLED', false),
+        'mode' => env('CARRYBEE_MODE', 'mock'),
+        'base_url' => env('CARRYBEE_BASE_URL'),
+        'api_token' => env('CARRYBEE_API_TOKEN'),
+    ],
 
 ];

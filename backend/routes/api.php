@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\PaymentInitiationController;
 use App\Http\Controllers\Api\Admin\PaymentSettingController;
 use App\Http\Controllers\Api\Admin\PaymentReviewController;
 use App\Http\Controllers\Api\Admin\PaymentResolutionController;
+use App\Http\Controllers\Api\Admin\DeliveryController;
 
 
 // Public login endpoint.
@@ -52,6 +53,10 @@ Route::prefix('admin')
             [PaymentResolutionController::class, 'update']
         );
 
+        Route::get('/deliveries', [DeliveryController::class, 'index']);
+        Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show']);
+
+        Route::post('/deliveries/{delivery}/retry', [DeliveryController::class, 'retry']);
     });
 
 Route::post('/checkout', [CheckoutController::class, 'store'])

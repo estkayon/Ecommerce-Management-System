@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use App\Events\OrderPaid;
 
 class PaymentConfirmationService
 {
@@ -206,11 +207,16 @@ class PaymentConfirmationService
                 'failure_reason' => null,
             ]);
 
+            
             $order->update([
                 'status' => 'confirmed',
                 'payment_status' => 'paid',
                 'paid_at' => now(),
             ]);
+
+            DB::afterCommit(function () use ($order) {
+                OrderPaid::dispatch($order->id);
+            });
 
             return $lockedPayment->refresh();
         }, 3);
